@@ -176,7 +176,16 @@ func (s *AcaiaInput) readEvent(buf []byte) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	weight := float64(result) / 100.0
+
+	var negative float64
+	if buf[7]&0x02 == 0 {
+		negative = 1.0
+	} else {
+		negative = -1.0
+	}
+
+	weight := negative * float64(result) / 100.0
+
 	s.Log.Info("weight: ", weight)
 	s.weight <- weight
 }
