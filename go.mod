@@ -212,6 +212,15 @@ require (
 	k8s.io/client-go v0.28.2
 	layeh.com/radius v0.0.0-20221205141417-e7fbddd11d68
 	modernc.org/sqlite v1.24.0
+	tinygo.org/x/bluetooth v0.8.0
+)
+
+require (
+	github.com/fatih/structs v1.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/muka/go-bluetooth v0.0.0-20221213043340-85dc80edc4e1 // indirect
+	github.com/saltosystems/winrt-go v0.0.0-20230921082907-2ab5b7d431e1 // indirect
+	github.com/tinygo-org/cbgo v0.0.4 // indirect
 )
 
 require (
