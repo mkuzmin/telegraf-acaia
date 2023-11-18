@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
+	"strings"
 	"sync"
 	"time"
 	"tinygo.org/x/bluetooth"
@@ -23,7 +24,7 @@ var (
 )
 
 type AcaiaInput struct {
-	Guid string `toml:"guid"`
+	Name string `toml:"name"`
 
 	acc    telegraf.Accumulator
 	wg     sync.WaitGroup
@@ -37,8 +38,8 @@ func (*AcaiaInput) SampleConfig() string {
 }
 
 func (s *AcaiaInput) Init() error {
-	if s.Guid == "" {
-		return errors.New("guid is not set")
+	if s.Name == "" {
+		return errors.New("name is not set")
 	}
 
 	return nil
@@ -53,7 +54,7 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 
 	ch := make(chan bluetooth.ScanResult, 1)
 	err = adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-		if result.Address.String() == s.Guid {
+		if strings.HasPrefix(result.AdvertisementPayload.LocalName(), s.Name) {
 			err = adapter.StopScan()
 			if err != nil {
 				return
