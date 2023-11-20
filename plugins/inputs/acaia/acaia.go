@@ -6,7 +6,6 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"strings"
-	"sync"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -20,12 +19,12 @@ var (
 	_ telegraf.ServiceInput = &AcaiaInput{}
 )
 
+var adapter *bluetooth.Adapter
+
 type AcaiaInput struct {
 	Model string `toml:"model"`
 
 	acc        telegraf.Accumulator
-	wg         sync.WaitGroup
-	device     *bluetooth.Device
 	byteChan   chan byte
 	weightChan chan float64
 	Log        telegraf.Logger `toml:"-"`
@@ -40,20 +39,23 @@ func (s *AcaiaInput) Init() error {
 		return errors.New("model is not set")
 	}
 
+	if adapter == nil {
+		a := bluetooth.DefaultAdapter
+		err := a.Enable()
+		if err != nil {
+			return err
+		}
+		adapter = a
+	}
+
 	return nil
 }
 
 func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
-	adapter := bluetooth.DefaultAdapter
-	err := adapter.Enable()
-	if err != nil {
-		return err
-	}
-
 	ch := make(chan bluetooth.ScanResult, 1)
-	err = adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+	err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 		if strings.HasPrefix(result.AdvertisementPayload.LocalName(), s.Model) {
-			err = adapter.StopScan()
+			err := adapter.StopScan()
 			if err != nil {
 				return
 			}
@@ -65,7 +67,7 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 	}
 
 	result := <-ch
-	s.device, err = adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+	device, err := adapter.Connect(result.Address, bluetooth.ConnectionParams{})
 	if err != nil {
 		return err
 	}
@@ -75,7 +77,7 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 	case "ACAIAL1":
 		serviceUUID := bluetooth.ServiceUUIDInternetProtocolSupport
 		readCharUUID := bluetooth.New16BitUUID(0x2A80)
-		services, err := s.device.DiscoverServices([]bluetooth.UUID{serviceUUID})
+		services, err := device.DiscoverServices([]bluetooth.UUID{serviceUUID})
 		if err != nil {
 			return err
 		}
@@ -99,7 +101,7 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 		serviceUUID, _ := bluetooth.ParseUUID("49535343-fe7d-4ae5-8fa9-9fafd205e455")
 		readCharUUID, _ := bluetooth.ParseUUID("49535343-1e4d-4bd9-ba61-23c647249616")
 		writeCharUUID, _ := bluetooth.ParseUUID("49535343-8841-43f4-a8d4-ecbe34729bb3")
-		services, err := s.device.DiscoverServices([]bluetooth.UUID{serviceUUID})
+		services, err := device.DiscoverServices([]bluetooth.UUID{serviceUUID})
 		if err != nil {
 			return err
 		}
@@ -166,8 +168,9 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 	go func() {
 		for {
 			data := <-s.weightChan
-			fields := map[string]interface{}{"value": data}
-			acc.AddFields("weight", fields, nil)
+			fields := map[string]interface{}{"weight": data}
+			tags := map[string]string{"model": s.Model}
+			acc.AddFields("acaia", fields, tags)
 		}
 	}()
 
@@ -175,27 +178,12 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 }
 
 func (s *AcaiaInput) Stop() {
-	s.device.Disconnect()
+	//s.device.Disconnect()
 }
 
 func (s *AcaiaInput) Gather(_ telegraf.Accumulator) error {
 	return nil
 }
-
-//func (s *AcaiaInput) ping(char bluetooth.DeviceCharacteristic) {
-//	for {
-//		s.Log.Info("ping...")
-//		char.WriteWithoutResponse(
-//			[]byte{
-//				0xEF, 0xDD,
-//				0x00,
-//				0x02, 0x00,
-//				0x02, 0x00,
-//			},
-//		)
-//		time.Sleep(5 * time.Second)
-//	}
-//}
 
 func (s *AcaiaInput) readEvent(buf []byte) {
 	s.Log.Debugf("event: %x", buf)
