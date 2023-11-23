@@ -6,6 +6,7 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"strings"
+	"time"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -27,6 +28,7 @@ type AcaiaInput struct {
 	acc        telegraf.Accumulator
 	byteChan   chan byte
 	weightChan chan float64
+	timestamp  string
 	Log        telegraf.Logger `toml:"-"`
 }
 
@@ -47,6 +49,8 @@ func (s *AcaiaInput) Init() error {
 		}
 		adapter = a
 	}
+
+	s.timestamp = time.Now().Format(time.DateTime)
 
 	return nil
 }
@@ -169,7 +173,10 @@ func (s *AcaiaInput) Start(acc telegraf.Accumulator) error {
 		for {
 			data := <-s.weightChan
 			fields := map[string]interface{}{"weight": data}
-			tags := map[string]string{"model": s.Model}
+			tags := map[string]string{
+				"model":     s.Model,
+				"timestamp": s.timestamp,
+			}
 			acc.AddFields("acaia", fields, tags)
 		}
 	}()
